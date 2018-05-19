@@ -14,6 +14,8 @@ import android.graphics.drawable.Drawable;
 import android.net.Uri;
 
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.Toast;
 
 import com.xp.legend.lin15.bean.Rect;
@@ -31,14 +33,15 @@ public class StatusBarHeaderHook implements IXposedHookLoadPackage {
 
     private static final String CLASS = "com.android.systemui.qs.QuickStatusBarHeader";
     private static final String METHOD = "onFinishInflate";
-    private static View headerView;
+    private static ViewGroup headerView;
     private StatusBarHeaderHook statusBarHeaderHook;
     private HookReceiver hookReceiver;
     private SharedPreferences sharedPreferences;
-    private static final String header="header_view";
-    private int alpha_value=0;
-    private String ALPHA="alpha";
-    private int drawable=0;
+    private static final String header = "header_view";
+    private int alpha_value = 0;
+    private String ALPHA = "alpha";
+    private int drawable = 0;
+    private ImageView imageView;
 
 
     @Override
@@ -55,30 +58,45 @@ public class StatusBarHeaderHook implements IXposedHookLoadPackage {
 
                 XposedBridge.log("lin15----->>in the header");
 
-                sharedPreferences=AndroidAppHelper.currentApplication().getSharedPreferences(ReceiverAction.SS,Context.MODE_PRIVATE);
-                headerView = (View) param.thisObject;
+                sharedPreferences = AndroidAppHelper.currentApplication().getSharedPreferences(ReceiverAction.SS, Context.MODE_PRIVATE);
+                headerView = (ViewGroup) param.thisObject;
 
-                String s=sharedPreferences.getString(header,"");
+                String s = sharedPreferences.getString(header, "");
 
-                int color=sharedPreferences.getInt("header_color",-1);
+                int color = sharedPreferences.getInt("header_color", -1);
 
-                alpha_value=sharedPreferences.getInt(ALPHA,255);
+                alpha_value = sharedPreferences.getInt(ALPHA, 255);
 
-                drawable=AndroidAppHelper.currentApplication().getResources().getIdentifier("qs_background_primary","drawable",lpparam.packageName);
+                drawable = AndroidAppHelper.currentApplication().getResources().getIdentifier("qs_background_primary", "drawable", lpparam.packageName);
 
+                imageView = new ImageView(headerView.getContext());
 
-                if (!s.isEmpty()){
+                headerView.addView(imageView, 0);
 
-                    s="file:///"+s;
+                if (!s.isEmpty()) {
 
-                    Uri uri= Uri.parse(s);
+                    s = "file:///" + s;
 
-                    Bitmap bitmap= BitmapFactory.decodeStream(AndroidAppHelper.currentApplication().getContentResolver().openInputStream(uri));
-                    headerView.setBackground(new BitmapDrawable(AndroidAppHelper.currentApplication().getResources(),bitmap));
-                    headerView.getBackground().setAlpha(alpha_value);
+                    Uri uri = Uri.parse(s);
 
-                }else if (color!=-1){
+                    Bitmap bitmap = BitmapFactory.decodeStream(AndroidAppHelper.currentApplication().getContentResolver().openInputStream(uri));
 
+                    if (bitmap != null) {
+//                        deleteBg();
+                        imageView.setImageBitmap(bitmap);
+                        imageView.setImageAlpha(alpha_value);
+                    }
+
+//                    headerView.setBackground(new BitmapDrawable(AndroidAppHelper.currentApplication().getResources(),bitmap));
+//                    headerView.getBackground().setAlpha(alpha_value);
+
+                } else if (color != -1) {
+
+//                    imageView.setImageBitmap(null);
+//                    imageView.setBackgroundColor(color);
+//                    imageView.setImageAlpha(alpha_value);
+
+//                    deleteBg();
                     headerView.setBackgroundColor(color);
                     headerView.getBackground().setAlpha(alpha_value);
 
@@ -96,7 +114,7 @@ public class StatusBarHeaderHook implements IXposedHookLoadPackage {
 
     private void registerBroadcast() {
 
-        if (hookReceiver!=null){//防止重复注册
+        if (hookReceiver != null) {//防止重复注册
             return;
         }
 
@@ -127,11 +145,11 @@ public class StatusBarHeaderHook implements IXposedHookLoadPackage {
                 return;
             }
 
-            switch (action){
+            switch (action) {
 
                 case ReceiverAction.HEADER_SEND_ALBUM://接收URI并设置上去，最后保存在本地，方便重启后调用
 
-                    setImageBackground(intent,context);
+                    setImageBackground(intent, context);
 
                     break;
                 case ReceiverAction.HEADER_SEND_COLOR://接收颜色并设置上去，最后保存在本地，方便重启后调用
@@ -162,6 +180,9 @@ public class StatusBarHeaderHook implements IXposedHookLoadPackage {
                 case ReceiverAction.HEADER_DELETE_ALBUM:
 
                     deleteBg();
+
+                    Toast.makeText(AndroidAppHelper.currentApplication(), "背景已清除", Toast.LENGTH_SHORT).show();
+
                     break;
             }
         }
@@ -169,24 +190,31 @@ public class StatusBarHeaderHook implements IXposedHookLoadPackage {
 
     /**
      * 设置背景图
+     *
      * @param intent
      */
-    private void setImageBackground(Intent intent,Context context){
+    private void setImageBackground(Intent intent, Context context) {
 
-        String s=intent.getStringExtra("file");
+        String s = intent.getStringExtra("file");
 
 
+        Uri uri = Uri.parse("file:///" + s);
 
-        Uri uri= Uri.parse("file:///"+s);
-
-        if (uri==null){
+        if (uri == null) {
             return;
         }
         try {
-            Bitmap bitmap= BitmapFactory.decodeStream(context.getContentResolver().openInputStream(uri));
-            headerView.setBackground(new BitmapDrawable(context.getResources(),bitmap));
-            headerView.getBackground().setAlpha(alpha_value);//设置上透明度
-            sharedPreferences.edit().putString(header,s).apply();//保存
+            Bitmap bitmap = BitmapFactory.decodeStream(context.getContentResolver().openInputStream(uri));
+
+            if (bitmap == null) {
+                return;
+            }
+            deleteBg();//删除背景
+
+            setBitmap(bitmap);
+//            headerView.setBackground(new BitmapDrawable(context.getResources(),bitmap));
+//            headerView.getBackground().setAlpha(alpha_value);//设置上透明度
+            sharedPreferences.edit().putString(header, s).apply();//保存
             Toast.makeText(AndroidAppHelper.currentApplication(), "设置成功", Toast.LENGTH_SHORT).show();
         } catch (FileNotFoundException e) {
             e.printStackTrace();
@@ -194,22 +222,44 @@ public class StatusBarHeaderHook implements IXposedHookLoadPackage {
 
     }
 
+    /**
+     * 设置背景图
+     * 判空
+     * 设置显示
+     * 设置图片
+     * 设置透明度
+     *
+     * @param bitmap
+     */
+    private void setBitmap(Bitmap bitmap) {
+
+        if (bitmap == null) {
+            return;
+        }
+        imageView.setVisibility(View.VISIBLE);
+
+        imageView.setImageBitmap(bitmap);
+        imageView.setImageAlpha(alpha_value);
+
+    }
+
 
     /**
      * 返回信息
+     *
      * @param context
      */
-    private void sendViewInfo(Context context){
+    private void sendViewInfo(Context context) {
 
-        int w=headerView.getWidth();
-        int h=headerView.getHeight();
+        int w = headerView.getWidth();
+        int h = headerView.getHeight();
 
-        Rect rect=new Rect();
+        Rect rect = new Rect();
         rect.setWidth(w);
         rect.setHeight(h);
 
-        Intent intent1=new Intent(ReceiverAction.HEADER_SEND_INFO);
-        intent1.putExtra("info",rect);
+        Intent intent1 = new Intent(ReceiverAction.HEADER_SEND_INFO);
+        intent1.putExtra("info", rect);
 
         context.sendBroadcast(intent1);
 
@@ -218,84 +268,124 @@ public class StatusBarHeaderHook implements IXposedHookLoadPackage {
 
     /**
      * 改变下拉透明度
+     *
      * @param intent
      */
-    private void changeHeaderAlpha(Intent intent){
+    private void changeHeaderAlpha(Intent intent) {
 
-//        String s=sharedPreferences.getString(header,"");
+        String s = sharedPreferences.getString(header, "");
 
-        if (headerView==null||headerView.getBackground()==null){
+        int color = sharedPreferences.getInt("header_color", -1);
+
+        if (headerView == null) {
             return;
         }
 
-        float f=intent.getFloatExtra("float",-0.1f);
+        float f = intent.getFloatExtra("float", -0.1f);
 
-        if (f<0||f>1){
+        if (f < 0 || f > 1) {
             return;
         }
 
-        float alpha=(1-f)*alpha_value;
+        float alpha = (1 - f) * alpha_value;
 
-        if (alpha>alpha_value){
-            alpha=alpha_value;
+        if (alpha > alpha_value) {
+            alpha = alpha_value;
         }
 
-        if (alpha<0){
-            alpha=0;
+        if (alpha < 0) {
+            alpha = 0;
         }
 
-        headerView.getBackground().setAlpha((int) alpha);
+        if (!s.isEmpty()) {
 
-        if (f==1){
-            headerView.getBackground().setAlpha(0);
-        }else if (f==0){
+            imageView.setImageAlpha((int) alpha);
 
-            headerView.getBackground().setAlpha(alpha_value);
+            if (f == 1) {
+
+                imageView.setImageAlpha(0);
+            } else if (f == 0) {
+
+                imageView.setImageAlpha(alpha_value);
+            }
+
         }
+
+        if (color != -1) {
+
+            headerView.getBackground().setAlpha((int) alpha);
+            if (f == 1) {
+                headerView.getBackground().setAlpha(0);
+
+            } else if (f == 0) {
+
+                headerView.getBackground().setAlpha(alpha_value);
+            }
+        }
+
     }
 
     /**
      * 获取透明度并保存
+     *
      * @param intent
      */
-    private void getAlphaValue(Intent intent){
+    private void getAlphaValue(Intent intent) {
 
-        int value=intent.getIntExtra("alpha",-1);
+        int value = intent.getIntExtra("alpha", -1);
 
-        if (value<0){
+        if (value < 0) {
             return;
         }
 
-        alpha_value=value;//赋值
+        alpha_value = value;//赋值
 
-        sharedPreferences.edit().putInt(ALPHA,alpha_value).apply();//保存
+        sharedPreferences.edit().putInt(ALPHA, alpha_value).apply();//保存
 
-        String s=sharedPreferences.getString(header,"");
+        String s = sharedPreferences.getString(header, "");
 
-        if (s.isEmpty()||headerView==null||headerView.getBackground()==null){
+        if (s.isEmpty() || headerView == null || headerView.getBackground() == null) {
             return;
         }
 
-        headerView.getBackground().setAlpha(alpha_value);//更新
+        imageView.setImageAlpha(alpha_value);
+
+//        headerView.getBackground().setAlpha(alpha_value);//更新
     }
 
     /**
      * 移除背景
      */
-    private void deleteBg(){
+    private void deleteBg() {
 
-        String s=sharedPreferences.getString(header,"");
+        String s = sharedPreferences.getString(header, "");
 
-        int color=sharedPreferences.getInt("header_color",-1);
+        int color = sharedPreferences.getInt("header_color", -1);
 
-        if (color>0||!s.isEmpty()){
 
-            if (getDefaultDrawable()!=null) {
-                headerView.setBackground(null);
-                headerView.setBackground(getDefaultDrawable());
+        if (imageView != null) {
 
-                Toast.makeText(AndroidAppHelper.currentApplication(),"背景已清除",Toast.LENGTH_SHORT).show();
-            }
+            imageView.setImageBitmap(null);
+
+            imageView.setBackground(null);
+            imageView.setVisibility(View.GONE);
+
+//                Toast.makeText(AndroidAppHelper.currentApplication(), "背景已清除", Toast.LENGTH_SHORT).show();
+        }
+//            if (getDefaultDrawable()!=null) {
+//                headerView.setBackground(null);
+//                headerView.setBackground(getDefaultDrawable());
+//
+//                Toast.makeText(AndroidAppHelper.currentApplication(),"背景已清除",Toast.LENGTH_SHORT).show();
+//            }
+
+
+        if (color != -1) {
+
+            headerView.setBackground(null);
+//            headerView.setBackground(getDefaultDrawable());
+
+//            Toast.makeText(AndroidAppHelper.currentApplication(), "背景已清除", Toast.LENGTH_SHORT).show();
 
         }
 
@@ -303,29 +393,34 @@ public class StatusBarHeaderHook implements IXposedHookLoadPackage {
         sharedPreferences.edit().remove("header_color").apply();
 
 
-
     }
 
-    private Drawable getDefaultDrawable(){
+    private Drawable getDefaultDrawable() {
 
-        if (drawable==0){
+        if (drawable == 0) {
             return null;
         }
         return AndroidAppHelper.currentApplication().getDrawable(drawable);
 
     }
 
-    private void setColor(Intent intent){
+    private void setColor(Intent intent) {
 
-        int c=intent.getIntExtra("color",-1);
-        if (c==-1){
+        int c = intent.getIntExtra("color", -1);
+        if (c == -1) {
             return;
         }
+
+//        imageView.setVisibility(View.VISIBLE);
+//        imageView.setImageBitmap(null);
+//        imageView.setBackgroundColor(c);
+
+        deleteBg();
 
         headerView.setBackgroundColor(c);
         headerView.getBackground().setAlpha(alpha_value);
 
-        sharedPreferences.edit().putInt("header_color",c).apply();//保存颜色
+        sharedPreferences.edit().putInt("header_color", c).apply();//保存颜色
 
         Toast.makeText(AndroidAppHelper.currentApplication(), "设置成功", Toast.LENGTH_SHORT).show();
 

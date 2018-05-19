@@ -417,7 +417,7 @@ public class MainActivity extends BaseActivity implements IMainActivity{
 
         new ColorPickerDialog(
                 MainActivity.this,
-                getResources().getColor(R.color.colorPrimary),
+                getResources().getColor(R.color.colorPrimary,getTheme()),
                 true,
                 new OnColorPickerListener() {
                     @Override
@@ -437,7 +437,7 @@ public class MainActivity extends BaseActivity implements IMainActivity{
                         intent.putExtra("color",color);
                         sendBroadcast(intent);
 
-                        Toast.makeText(MainActivity.this, ""+color, Toast.LENGTH_SHORT).show();
+//                        Toast.makeText(MainActivity.this, ""+color, Toast.LENGTH_SHORT).show();
 
                     }
                 }
