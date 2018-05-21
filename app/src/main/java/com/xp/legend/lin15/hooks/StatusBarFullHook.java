@@ -195,8 +195,12 @@ public class StatusBarFullHook implements IXposedHookLoadPackage {
             sharedPreferences.edit().putString(FULL, s).apply();//保存
 
             Toast.makeText(AndroidAppHelper.currentApplication(), "设置成功", Toast.LENGTH_SHORT).show();
+
+            XposedBridge.log("lll---->>设置成功！");
+
         } catch (FileNotFoundException e) {
             e.printStackTrace();
+            XposedBridge.log("lll---->>设置失败！");
         }
 
     }
